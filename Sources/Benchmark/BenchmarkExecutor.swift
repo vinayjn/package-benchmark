@@ -378,6 +378,12 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             operatingSystemStatsProducer.enablePerformanceCounters()
         }
 
+        // Memory growth guard: stop early if the benchmark is consuming too much memory.
+        // Protects against OOM when stateful benchmarks accumulate data across scaled iterations.
+        let memoryGrowthLimit = benchmark.configuration.maxResidentMemoryGrowth
+        let baselineMemory = memoryGrowthLimit != nil
+            ? OperatingSystemStatsProducer.currentResidentMemory() : 0
+
         // Run the benchmark at a minimum the desired iterations/runtime --
         while iterations <= benchmark.configuration.maxIterations
             || wallClockDuration <= benchmark.configuration.maxDuration
@@ -398,6 +404,22 @@ struct BenchmarkExecutor { // swiftlint:disable:this type_body_length
             benchmark.run()
 
             iterations += 1
+
+            if let limit = memoryGrowthLimit, iterations.isMultiple(of: 100) {
+                let currentMemory = OperatingSystemStatsProducer.currentResidentMemory()
+                let growth = currentMemory - baselineMemory
+                if growth > limit {
+                    print(
+                        """
+                        warning: Benchmark '\(benchmark.name)' stopped early: resident memory grew \
+                        by \(growth / 1_048_576) MB (limit: \(limit / 1_048_576) MB). \
+                        Stateful benchmarks with high scalingFactor may need periodic state reset \
+                        or a lower maxIterations. Set maxResidentMemoryGrowth to nil to disable.
+                        """
+                    )
+                    break
+                }
+            }
 
             if iterations < 1_000 || iterations.isMultiple(of: 500) { // only update for low iteration count benchmarks, else 1/500
                 if var progressBar {

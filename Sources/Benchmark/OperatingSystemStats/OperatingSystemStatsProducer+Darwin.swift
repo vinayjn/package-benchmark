@@ -57,6 +57,28 @@ final class OperatingSystemStatsProducer {
         nsPerSchedulerTick = 1_000_000_000 / schedulerTicksPerSecond
     }
 
+    /// Lightweight single-shot query for current resident memory (bytes).
+    /// One syscall, no locking — suitable for the memory growth guard.
+    static func currentResidentMemory() -> Int {
+        #if os(macOS)
+        var info = proc_taskinfo()
+        let size = MemoryLayout<proc_taskinfo>.size
+        let result = proc_pidinfo(getpid(), PROC_PIDTASKINFO, 0, &info, Int32(size))
+        guard result == size else { return 0 }
+        return Int(info.pti_resident_size)
+        #else
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return 0 }
+        return Int(info.resident_size)
+        #endif
+    }
+
     #if os(macOS)
     fileprivate
         func getProcInfo() -> proc_taskinfo

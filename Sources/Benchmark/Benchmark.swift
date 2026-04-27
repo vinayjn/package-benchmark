@@ -184,6 +184,7 @@ public final class Benchmark: Codable, Hashable { // swiftlint:disable:this type
             scalingFactor: .one,
             maxDuration: .seconds(1),
             maxIterations: 10_000,
+            maxResidentMemoryGrowth: 512 * 1_024 * 1_024,
             skip: false,
             thresholds: nil
         ),
@@ -484,6 +485,11 @@ public extension Benchmark {
         public var maxDuration: Duration
         /// The maximum number of iterations for the benchmark., currently defaults to 10K iterations if not set
         public var maxIterations: Int
+        /// Maximum allowed growth in resident memory (bytes) before the benchmark is stopped early.
+        /// Protects against out-of-memory crashes when stateful benchmarks accumulate data across
+        /// scaled iterations (e.g. repeated insertions with `scalingFactor: .kilo`).
+        /// Set to `nil` to disable the guard. Defaults to 512 MB.
+        public var maxResidentMemoryGrowth: Int?
         /// Whether to skip this test (convenience for not having to comment out tests that have issues)
         public var skip = false
         /// Customized threshold tolerances for a given metric for the Benchmark used for checking for regressions/improvements/equality.
@@ -502,6 +508,7 @@ public extension Benchmark {
             scalingFactor: BenchmarkScalingFactor = defaultConfiguration.scalingFactor,
             maxDuration: Duration = defaultConfiguration.maxDuration,
             maxIterations: Int = defaultConfiguration.maxIterations,
+            maxResidentMemoryGrowth: Int? = defaultConfiguration.maxResidentMemoryGrowth,
             skip: Bool = defaultConfiguration.skip,
             thresholds: [BenchmarkMetric: BenchmarkThresholds]? =
                 defaultConfiguration.thresholds,
@@ -516,6 +523,7 @@ public extension Benchmark {
             self.scalingFactor = scalingFactor
             self.maxDuration = maxDuration
             self.maxIterations = maxIterations
+            self.maxResidentMemoryGrowth = maxResidentMemoryGrowth
             self.skip = skip
             self.thresholds = thresholds
             self.setup = setup
@@ -532,6 +540,7 @@ public extension Benchmark {
             case scalingFactor
             case maxDuration
             case maxIterations
+            case maxResidentMemoryGrowth
             case thresholds
         }
         // swiftlint:enable nesting

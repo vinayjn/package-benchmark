@@ -46,6 +46,15 @@ final class OperatingSystemStatsProducer {
         pageSize = sysconf(Int32(_SC_PAGESIZE))
     }
 
+    /// Lightweight single-shot query for current resident memory (bytes).
+    /// Reads /proc/self/statm — no locking, suitable for the memory growth guard.
+    static func currentResidentMemory() -> Int {
+        guard let contents = try? String(contentsOfFile: "/proc/self/statm", encoding: .ascii) else { return 0 }
+        let parts = contents.split(separator: " ")
+        guard parts.count >= 2, let pages = Int(parts[1]) else { return 0 }
+        return pages * sysconf(Int32(_SC_PAGESIZE))
+    }
+
     deinit {}
 
     // We should cache the open file(s) and just read from file offset 0 to reduce overhead
